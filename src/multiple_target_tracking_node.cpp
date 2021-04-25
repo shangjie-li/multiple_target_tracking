@@ -1,9 +1,12 @@
 #include <omp.h>
 #include <ros/ros.h>
 #include <string>
+
+#include <std_msgs/Header.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <std_msgs/Header.h>
+#include <perception_msgs/Obstacle.h>
+#include <perception_msgs/ObstacleArray.h>
 
 #include <Eigen/Dense>
 #include <cassert>
@@ -26,6 +29,7 @@ public:
 private:
     std::string sub_topic_;
     std::string pub_topic_;
+    std::string pub_topic_obstacle_array_;
     std::string frame_id_;
 
     bool show_objects_num_;
@@ -47,6 +51,7 @@ private:
 
     ros::Subscriber sub_;
     ros::Publisher pub_;
+    ros::Publisher pub_obstacle_array_;
 
     std::vector<Object> objs_;
     std::vector<Object> objs_temp_;
@@ -72,9 +77,13 @@ private:
     void publish_markers(ros::Publisher &pub,
                   visualization_msgs::MarkerArray *markers_out,
                   std::vector<Object> *objs,
-                  std::vector<Object> *objs_ignored,
                   std_msgs::Header &header);
     
+    void publish_obstacles(ros::Publisher &pub,
+                  perception_msgs::ObstacleArray *obstacles_out,
+                  std::vector<Object> *objs,
+                  std_msgs::Header &header);
+
     void callback(const visualization_msgs::MarkerArray &markers_in);
 };
 
@@ -82,6 +91,7 @@ MTT::MTT(ros::NodeHandle &nh)
 {
     nh.param<std::string>("sub_topic", sub_topic_, "/objects");
     nh.param<std::string>("pub_topic", pub_topic_, "/objects_tracked");
+    nh.param<std::string>("pub_topic_obstacle_array", pub_topic_obstacle_array_, "/obstacle_array");
     nh.param<std::string>("frame_id", frame_id_, "pandar");
 
     nh.param<bool>("show_objects_num", show_objects_num_, false);
@@ -103,6 +113,7 @@ MTT::MTT(ros::NodeHandle &nh)
 
     sub_ = nh.subscribe(sub_topic_, 1, &MTT::callback, this);
     pub_ = nh.advertise<visualization_msgs::MarkerArray>(pub_topic_, 1);
+    pub_obstacle_array_ = nh.advertise<perception_msgs::ObstacleArray>(pub_topic_obstacle_array_, 1);
 
     number_ = 0;
 
@@ -293,7 +304,6 @@ void MTT::init_objs(std::vector<Object> *objs_observed,
 void MTT::publish_markers(ros::Publisher &pub,
                   visualization_msgs::MarkerArray *markers_out,
                   std::vector<Object> *objs,
-                  std::vector<Object> *objs_ignored,
                   std_msgs::Header &header)
 {
     for (int i = 0; i < objs->size(); i ++)
@@ -339,50 +349,53 @@ void MTT::publish_markers(ros::Publisher &pub,
         markers_out->markers.push_back(mar);
     }
 
-    for (int i = 0; i < objs_ignored->size(); i ++)
+    pub.publish(*markers_out);
+}
+
+void MTT::publish_obstacles(ros::Publisher &pub,
+                  perception_msgs::ObstacleArray *obstacles_out,
+                  std::vector<Object> *objs,
+                  std_msgs::Header &header)
+{
+    for (int i = 0; i < objs->size(); i ++)
     {
-        visualization_msgs::Marker mar;
-        mar.header = header;
+        perception_msgs::Obstacle obs;
+        obs.header = header;
 
-        // 设置该标记的命名空间和ID，ID应该是独一无二的
-        // 具有相同命名空间和ID的标记将会覆盖
-        mar.ns = "obstacle";
-        mar.id = i % 1000 + 1000;
+        // 设置命名空间和ID，ID应该是独一无二的
+        obs.ns = "obstacle";
+        obs.id = (*objs)[i].number;
 
-        // 设置标记类型
-        mar.type = visualization_msgs::Marker::CUBE;
+        // 设置位姿
+        obs.pose.position.x = (*objs)[i].x0;
+        obs.pose.position.y = (*objs)[i].y0;
+        obs.pose.position.z = (*objs)[i].z0;
+        obs.pose.orientation.x = 0;
+        obs.pose.orientation.y = 0;
+        obs.pose.orientation.z = sin(0.5 * (*objs)[i].phi);
+        obs.pose.orientation.w = cos(0.5 * (*objs)[i].phi);
+
+        // 设置尺寸
+        obs.scale.x = (*objs)[i].l;
+        obs.scale.y = (*objs)[i].w;
+        obs.scale.z = (*objs)[i].h;
+
+        // 设置速度
+        obs.v_validity = true;
+        obs.vx = (*objs)[i].vx;
+        obs.vy = (*objs)[i].vy;
+        obs.vz = 0;
         
-        // 设置标记行为，ADD为添加，DELETE为删除
-        mar.action = visualization_msgs::Marker::ADD;
+        // 设置加速度
+        obs.a_validity = false;
+        obs.ax = 0;
+        obs.ay = 0;
+        obs.az = 0;
 
-        // 设置标记位姿
-        mar.pose.position.x = (*objs_ignored)[i].x0;
-        mar.pose.position.y = (*objs_ignored)[i].y0;
-        mar.pose.position.z = (*objs_ignored)[i].z0;
-        mar.pose.orientation.x = 0;
-        mar.pose.orientation.y = 0;
-        mar.pose.orientation.z = sin(0.5 * (*objs_ignored)[i].phi);
-        mar.pose.orientation.w = cos(0.5 * (*objs_ignored)[i].phi);
-
-        // 设置标记尺寸
-        mar.scale.x = (*objs_ignored)[i].l;
-        mar.scale.y = (*objs_ignored)[i].w;
-        mar.scale.z = (*objs_ignored)[i].h;
-
-        // 设置标记颜色，应确保不透明度alpha非零
-        mar.color.r = 0.5f;
-        mar.color.g = 0.5f;
-        mar.color.b = 0.5f;
-        mar.color.a = 0.85;
-
-        // 设置标记生存时间，单位为s
-        mar.lifetime = ros::Duration(0.1);
-        mar.text = ' ';
-
-        markers_out->markers.push_back(mar);
+        obstacles_out->obstacles.push_back(obs);
     }
 
-    pub.publish(*markers_out);
+    pub.publish(*obstacles_out);
 }
 
 void MTT::callback(const visualization_msgs::MarkerArray &markers_in)
@@ -406,11 +419,16 @@ void MTT::callback(const visualization_msgs::MarkerArray &markers_in)
     // 增广临时跟踪列表
     init_objs(&objs_observed, &objs_temp_);
 
-    visualization_msgs::MarkerArray markers_out;
+    // 发布话题
     std_msgs::Header header;
     header.stamp = ros::Time::now();
     header.frame_id = frame_id_;
-    publish_markers(pub_, &markers_out, &objs_, &objs_ignored, header);
+    
+    visualization_msgs::MarkerArray markers_out;
+    publish_markers(pub_, &markers_out, &objs_, header);
+
+    perception_msgs::ObstacleArray obstacles_out;
+    publish_obstacles(pub_obstacle_array_, &obstacles_out, &objs_, header);
 
     ros::Time time_end = ros::Time::now();
 

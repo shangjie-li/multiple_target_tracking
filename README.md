@@ -8,6 +8,7 @@ ROS package for multiple target tracking
    mkdir -p ros_ws/src
    cd ros_ws/src
    git clone https://github.com/shangjie-li/multiple_target_tracking.git
+   git clone https://github.com/shangjie-li/perception_msgs.git
    cd ..
    catkin_make
    ```
@@ -17,6 +18,7 @@ ROS package for multiple target tracking
    ```Shell
    <param name="sub_topic" value="/objects" />
    <param name="pub_topic" value="/objects_tracked" />
+   <param name="pub_topic_obstacle_array" value="/obstacles_array" />
    <param name="frame_id" value="pandar" />
         
    <param name="show_objects_num" value="true" />
@@ -38,6 +40,7 @@ ROS package for multiple target tracking
    ```
     - `sub_topic`指明订阅的MarkerArray类型话题。
     - `pub_topic`指明发布的MarkerArray类型话题，可以用rviz查看。
+    - `pub_topic_obstacle_array`指明发布的ObstacleArray类型话题。
     - `time_interval`为时间间隔。
     - `gate_threshold`为跟踪门阈值。
     - `blind_update_limit`为中断更新的次数限制。
