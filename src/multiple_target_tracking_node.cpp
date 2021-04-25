@@ -266,7 +266,7 @@ void MTT::augment_objs(std::vector<Object> *objs_observed,
             objs_observed->erase(objs_observed->begin() + idx);
 
             number_ += 1;
-            number_ = number_ % 1000;
+            number_ = number_ % 10000;
             (*objs_temp)[j].number = number_;
             (*objs_temp)[j].x0 = (*objs_observed)[idx].x0;
             (*objs_temp)[j].y0 = (*objs_observed)[idx].y0;
