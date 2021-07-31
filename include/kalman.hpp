@@ -2,9 +2,9 @@
 // @author: Shangjie Li
 // @date: 2021.03.30
 
-#include <Eigen/Dense>
-
 #pragma once
+
+#include <Eigen/Dense>
 
 class KalmanFilter2D
 {
